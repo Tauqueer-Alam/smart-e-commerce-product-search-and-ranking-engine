@@ -129,7 +129,10 @@ def cache_stats():
         "hit_rate_pct": round((hits / total) * 100, 1) if total > 0 else 0.0
     })
 
-if __name__ == '__main__':
+# Run startup tasks unconditionally so Gunicorn executes them
+with app.app_context():
     db.setup_database()
     initialize_engine()
+
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
