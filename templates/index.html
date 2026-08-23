@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSearch — E-Commerce Search Engine</title>
+    <meta name="description" content="C++ Trie, Min-Heap, LRU Cache & Binary Search powered product search engine.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+
+<!-- ── Navbar ── -->
+<header class="navbar">
+    <div class="logo"><i class="fa-solid fa-bolt"></i> SmartSearch</div>
+    <div class="search-container">
+        <input type="text" id="search-bar" placeholder="Search phones, shoes, books..." autocomplete="off">
+        <button id="search-btn"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <div id="autocomplete-box" class="dropdown hidden"></div>
+    </div>
+</header>
+
+<!-- ── Hero ── -->
+<div class="hero">
+    <h1>Find Better Products, Faster</h1>
+    <p>High-performance product search powered by C++ DSA and PostgreSQL</p>
+</div>
+
+<!-- ── Category Chips ── -->
+<div class="category-bar">
+    <button class="chip active" data-category="All"><i class="fa-solid fa-border-all"></i> All</button>
+    <button class="chip" data-category="Electronics"><i class="fa-solid fa-laptop"></i> Electronics</button>
+    <button class="chip" data-category="Footwear"><i class="fa-solid fa-shoe-prints"></i> Footwear</button>
+    <button class="chip" data-category="Clothing"><i class="fa-solid fa-shirt"></i> Clothing</button>
+    <button class="chip" data-category="Books"><i class="fa-solid fa-book"></i> Books</button>
+    <button class="chip" data-category="Home & Kitchen"><i class="fa-solid fa-kitchen-set"></i> Home & Kitchen</button>
+    <button class="chip" data-category="Sports & Fitness"><i class="fa-solid fa-dumbbell"></i> Sports</button>
+    <button class="chip" data-category="Beauty & Personal Care"><i class="fa-solid fa-spa"></i> Beauty</button>
+</div>
+
+<!-- ── Price Range Filter ── -->
+<div class="price-filter-bar">
+    <div class="price-filter-label">
+        <i class="fa-solid fa-filter" style="color: var(--primary)"></i>
+        <span>Price Range</span>
+        <span id="price-display" class="price-display">₹0 — ₹1,50,000</span>
+    </div>
+    <div class="slider-wrapper">
+        <div class="slider-track" id="slider-track"></div>
+        <input type="range" id="range-min" class="range-input" min="0" max="150000" value="0" step="100">
+        <input type="range" id="range-max" class="range-input" min="0" max="150000" value="150000" step="100">
+    </div>
+    <label class="price-toggle">
+        <input type="checkbox" id="price-filter-toggle">
+        <span>Apply filter</span>
+    </label>
+</div>
+
+<main class="content">
+    <!-- ── Results ── -->
+    <div class="results-section">
+        <div class="results-header">
+            <h2 id="results-title">Top Products</h2>
+            <span id="results-count" class="results-count"></span>
+        </div>
+        <div id="loading" class="loading-state hidden">
+            <div class="spinner"></div>
+            <p>Engine is ranking results…</p>
+        </div>
+        <div id="results-grid" class="grid"></div>
+    </div>
+
+    <!-- ── DSA Performance Panel ── -->
+    <aside class="dsa-panel" id="dsa-panel">
+        <div class="dsa-panel-header">
+            <span><i class="fa-solid fa-microchip"></i> DSA Engine Report</span>
+            <button class="dsa-close" id="dsa-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="dsa-metric" id="dsa-query-row">
+            <span class="dsa-label">Query</span>
+            <span class="dsa-value" id="dsa-query">—</span>
+        </div>
+
+        <div class="dsa-structures" id="dsa-structures"></div>
+
+        <div class="dsa-stats-grid">
+            <div class="dsa-stat">
+                <div class="dsa-stat-val" id="dsa-time">—</div>
+                <div class="dsa-stat-lbl">Response (ms)</div>
+            </div>
+            <div class="dsa-stat">
+                <div class="dsa-stat-val" id="dsa-count">—</div>
+                <div class="dsa-stat-lbl">Products Found</div>
+            </div>
+            <div class="dsa-stat">
+                <div class="dsa-stat-val" id="dsa-hit-rate">—</div>
+                <div class="dsa-stat-lbl">Cache Hit Rate</div>
+            </div>
+        </div>
+
+        <div class="dsa-cache-bar-wrap">
+            <div class="dsa-cache-label">
+                <span>Hits <strong id="dsa-hits">0</strong></span>
+                <span>Misses <strong id="dsa-misses">0</strong></span>
+            </div>
+            <div class="dsa-cache-bar">
+                <div class="dsa-cache-fill" id="dsa-cache-fill"></div>
+            </div>
+        </div>
+    </aside>
+</main>
+
+<script src="{{ url_for('static', filename='script.js') }}?v=3"></script>
+</body>
+</html>

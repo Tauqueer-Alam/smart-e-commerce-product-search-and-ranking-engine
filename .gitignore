@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.env
+dsa_engine/engine2.dll
