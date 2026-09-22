@@ -1,111 +1,158 @@
-import ctypes
-import os
+import bisect
+import heapq
+import re
+import time
+from collections import OrderedDict
 
-_lib_name = "engine2.dll" if os.name == "nt" else "libengine.so"
-_lib_dir  = os.path.dirname(os.path.abspath(__file__))
-_lib_path = os.path.join(_lib_dir, _lib_name)
 
-if os.name == "nt":
-    os.add_dll_directory(_lib_dir)
+_products = []
+_product_map = {}
+_price_sorted = []
+_price_values = []
+_trie = {"children": {}, "ids": set()}
+_cache = OrderedDict()
+_cache_capacity = 100
+_cache_hits = 0
+_cache_misses = 0
+_last_engine_time_us = 0
 
-try:
-    _engine = ctypes.CDLL(_lib_path)
-    print(f"[engine_wrapper] Loaded: {_lib_path}")
-except OSError as e:
-    print(f"[engine_wrapper] ERROR loading engine: {e}")
-    _engine = None
 
-if _engine:
-    _engine.load_products.argtypes  = [ctypes.c_char_p]
-    _engine.load_products.restype   = ctypes.c_int
+def _tokenize(text):
+    return re.findall(r"[a-z0-9]+", text.lower())
 
-    _engine.get_loaded_count.argtypes = []
-    _engine.get_loaded_count.restype  = ctypes.c_int
 
-    _engine.get_cache_hits.argtypes   = []
-    _engine.get_cache_hits.restype    = ctypes.c_int
+def _score(product):
+    return (product["rating"] * 0.5
+            + product["popularity"] * 0.3
+            + product["relevance"] * 0.2)
 
-    _engine.get_cache_misses.argtypes = []
-    _engine.get_cache_misses.restype  = ctypes.c_int
 
-    _engine.reset_cache_stats.argtypes = []
-    _engine.reset_cache_stats.restype  = None
+def _matching_ids(tokens):
+    if not tokens:
+        return set()
+    matching = None
+    for token in tokens:
+        node = _trie
+        for character in token:
+            node = node["children"].get(character)
+            if node is None:
+                return set()
+        token_ids = node["ids"]
+        matching = token_ids if matching is None else matching & token_ids
+        if not matching:
+            return set()
+    return matching
 
-    _engine.autocomplete.argtypes    = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
-    _engine.autocomplete.restype     = None
 
-    _engine.search_products.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
-    _engine.search_products.restype  = None
+def _top_k(products, limit=10):
+    heap = []
+    for product in products:
+        item = (_score(product), product["id"], product)
+        if len(heap) < limit:
+            heapq.heappush(heap, item)
+        elif item[:2] > heap[0][:2]:
+            heapq.heapreplace(heap, item)
+    return [item[2]["id"] for item in sorted(heap, key=lambda item: item[:2], reverse=True)]
 
-    _engine.search_with_price.argtypes = [ctypes.c_char_p, ctypes.c_double, ctypes.c_double,
-                                          ctypes.c_char_p, ctypes.c_int]
-    _engine.search_with_price.restype  = None
 
-    _engine.get_last_engine_time_us.argtypes = []
-    _engine.get_last_engine_time_us.restype  = ctypes.c_longlong
+def _cache_get(key):
+    global _cache_hits
+    if key not in _cache:
+        return None
+    _cache_hits += 1
+    _cache.move_to_end(key)
+    return _cache[key]
+
+
+def _cache_put(key, value):
+    _cache[key] = value
+    _cache.move_to_end(key)
+    if len(_cache) > _cache_capacity:
+        _cache.popitem(last=False)
+
+
+def _search(query, min_price=None, max_price=None):
+    global _cache_misses, _last_engine_time_us
+    started = time.perf_counter_ns()
+    cache_key = query if min_price is None else f"{query}|{int(min_price)}|{int(max_price)}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        _last_engine_time_us = (time.perf_counter_ns() - started) // 1000
+        return cached
+
+    _cache_misses += 1
+    tokens = _tokenize(query)
+    if min_price is None:
+        candidates = _products if not tokens else [
+            _product_map[product_id] for product_id in _matching_ids(tokens)
+        ]
+    else:
+        start = bisect.bisect_left(_price_values, min_price)
+        end = bisect.bisect_right(_price_values, max_price)
+        candidates = _price_sorted[start:end]
+        if tokens:
+            matching = _matching_ids(tokens)
+            candidates = [product for product in candidates if product["id"] in matching]
+
+    result = _top_k(candidates)
+    _cache_put(cache_key, result)
+    _last_engine_time_us = (time.perf_counter_ns() - started) // 1000
+    return result
 
 
 def load_products(product_list):
-    if not _engine:
-        return 0
-    lines = []
-    for p in product_list:
-        name = p['name'].replace('|', '-')
-        lines.append(f"{p['id']}|{name}|{p['price']}|{p['rating']}|{p['popularity']}|{p['relevance']}")
-    csv_data = "\n".join(lines)
-    n = _engine.load_products(csv_data.encode("utf-8"))
-    print(f"[engine_wrapper] load_products: {n} products loaded into C++ engine")
-    return n
+    global _products, _product_map, _price_sorted, _price_values
+    global _trie, _cache, _cache_hits, _cache_misses
+    _products = [dict(product) for product in product_list]
+    _product_map = {product["id"]: product for product in _products}
+    _price_sorted = sorted(_products, key=lambda product: product["price"])
+    _price_values = [product["price"] for product in _price_sorted]
+    _trie = {"children": {}, "ids": set()}
+    for product in _products:
+        for token in set(_tokenize(product["name"])):
+            node = _trie
+            for character in token:
+                node = node["children"].setdefault(
+                    character, {"children": {}, "ids": set()}
+                )
+                node["ids"].add(product["id"])
+    _cache = OrderedDict()
+    _cache_hits = 0
+    _cache_misses = 0
+    return len(_products)
 
 def get_loaded_count():
-    return _engine.get_loaded_count() if _engine else 0
+    return len(_products)
 
 def get_cache_hits():
-    return _engine.get_cache_hits() if _engine else 0
+    return _cache_hits
 
 def get_cache_misses():
-    return _engine.get_cache_misses() if _engine else 0
+    return _cache_misses
 
 def get_last_engine_time_us():
-    """Return the real C++ engine time (chrono) from the last search, in microseconds."""
-    return _engine.get_last_engine_time_us() if _engine else 0
+    return _last_engine_time_us
 
 def reset_cache_stats():
-    if _engine:
-        _engine.reset_cache_stats()
-
-def _parse_ids(buf_val):
-    raw = buf_val.decode("utf-8")
-    return [int(x) for x in raw.split(",") if x] if raw else []
+    global _cache_hits, _cache_misses
+    _cache_hits = 0
+    _cache_misses = 0
 
 def autocomplete(prefix):
-    if not _engine:
+    tokens = _tokenize(prefix)
+    if not tokens:
         return []
-    buf = ctypes.create_string_buffer(4096)
-    _engine.autocomplete(prefix.encode("utf-8"), buf, 4096)
-    return _parse_ids(buf.value)
+    matching = _matching_ids(tokens)
+    return _top_k([_product_map[product_id] for product_id in matching], limit=8)
 
 def search_products(query):
     """Returns (ids, cache_hit)."""
-    if not _engine:
-        return [], False
     hits_before = get_cache_hits()
-    buf = ctypes.create_string_buffer(4096)
-    _engine.search_products(query.encode("utf-8"), buf, 4096)
-    cache_hit = get_cache_hits() > hits_before
-    return _parse_ids(buf.value), cache_hit
+    result = _search(query)
+    return result, get_cache_hits() > hits_before
 
 def search_with_price(query, min_price, max_price):
-    """Returns (ids, cache_hit). Uses Binary Search + Min-Heap in C++."""
-    if not _engine:
-        return [], False
+    """Returns (ids, cache_hit). Uses Binary Search + Min-Heap in Python."""
     hits_before = get_cache_hits()
-    buf = ctypes.create_string_buffer(4096)
-    _engine.search_with_price(
-        query.encode("utf-8"),
-        ctypes.c_double(min_price),
-        ctypes.c_double(max_price),
-        buf, 4096
-    )
-    cache_hit = get_cache_hits() > hits_before
-    return _parse_ids(buf.value), cache_hit
+    result = _search(query, min_price, max_price)
+    return result, get_cache_hits() > hits_before

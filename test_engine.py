@@ -3,7 +3,7 @@ import dsa_engine.engine_wrapper as engine
 
 products = db.get_all_products()
 loaded = engine.load_products(products)
-print(f"Products loaded into C++ engine: {loaded}")
+print(f"Products loaded into Python engine: {loaded}")
 
 # Test search
 ids = engine.search_products("shoe")

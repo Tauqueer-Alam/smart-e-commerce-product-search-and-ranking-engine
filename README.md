@@ -1,9 +1,9 @@
 # ⚡ SmartSearch — E-Commerce Product Search & Ranking Engine
 
-> A high-performance product search engine powered by a custom **C++ DSA engine** bridged to a **Flask REST API** with **PostgreSQL** persistence. Built for SDE portfolio demonstrations.
+> A product search engine powered by a custom **Python DSA engine**, a **Flask REST API**, and **PostgreSQL** persistence. Built for SDE portfolio demonstrations.
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
-![C++](https://img.shields.io/badge/C%2B%2B-17-orange?logo=cplusplus)
+![DSA](https://img.shields.io/badge/DSA-Python-orange?logo=python)
 ![Flask](https://img.shields.io/badge/Flask-3.x-green?logo=flask)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql)
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-ORM-red)
@@ -12,7 +12,7 @@
 
 ## 📌 Project Overview
 
-SmartSearch solves three classic backend engineering challenges using custom data structures implemented in C++:
+SmartSearch solves classic backend engineering challenges using custom data structures implemented in Python:
 
 | Challenge | DSA Solution | Complexity |
 |-----------|-------------|------------|
@@ -33,7 +33,7 @@ Browser (HTML + CSS + Vanilla JS)
             │
      ┌──────┴──────────┐
      ▼                 ▼
-PostgreSQL          C++ DSA Engine  (engine2.dll)
+PostgreSQL          Python DSA Engine
 (SQLAlchemy)              │
                  ┌────────┼────────┬──────────┐
                  ▼        ▼        ▼          ▼
@@ -50,7 +50,7 @@ User types "nike shoe" + price ₹2000–₹10000
 [Flask] receives GET /api/search?q=nike+shoe&min_price=2000&max_price=10000
     │
     ▼
-[C++ Engine] checks LRU Cache (HashMap lookup O(1))
+[Python engine] checks LRU Cache (HashMap lookup O(1))
     ├── CACHE HIT  → return cached result instantly
     └── CACHE MISS → Binary Search on price-sorted array O(log N)
                         → substring filter on price-range slice
@@ -120,12 +120,7 @@ Project - Smart E-Commerce Product Search & Ranking Engine/
 ├── test_engine.py             # Standalone engine test script
 │
 ├── dsa_engine/
-│   ├── engine.cpp             # C++ DSA implementation
-│   ├── engine2.dll            # Compiled shared library (Windows)
-│   ├── engine_wrapper.py      # Python ctypes bridge
-│   ├── libstdc++-6.dll        # Bundled MinGW runtime
-│   ├── libgcc_s_seh-1.dll
-│   └── libwinpthread-1.dll
+│   └── engine_wrapper.py      # Pure-Python DSA search engine
 │
 ├── templates/
 │   └── index.html             # Single-page frontend
@@ -142,7 +137,6 @@ Project - Smart E-Commerce Product Search & Ranking Engine/
 ### Prerequisites
 - Python 3.10+
 - PostgreSQL 14+ (running on `localhost:5432`)
-- MinGW/GCC (for recompiling C++ if needed)
 
 ### 1. Install Python dependencies
 ```bash
@@ -168,15 +162,15 @@ python app.py
 On first run, the app automatically:
 - Creates the `products` table
 - Seeds **1,305 products** across 7 categories
-- Loads all products into the C++ engine (Trie + Heap + LRU)
+- Loads all products into the Python engine (Trie + Heap + LRU)
 
 Open **http://127.0.0.1:5000** in your browser.
 
-### 4. (Optional) Recompile C++ Engine
+### 4. Build
 ```bash
-cd dsa_engine
-g++ -shared -o engine2.dll engine.cpp -O2 -static-libgcc -static-libstdc++
+bash build.sh
 ```
+The project is pure Python and does not require native compilation.
 
 ---
 
@@ -186,7 +180,7 @@ g++ -shared -o engine2.dll engine.cpp -O2 -static-libgcc -static-libstdc++
 |--------|----------|-------------|
 | `GET` | `/` | Serve the frontend |
 | `GET` | `/api/featured?category=X` | Top-ranked products (DB ORDER BY) |
-| `GET` | `/api/search?q=X&category=Y&min_price=A&max_price=B` | C++ engine search with optional filters |
+| `GET` | `/api/search?q=X&category=Y&min_price=A&max_price=B` | Python engine search with optional filters |
 | `GET` | `/api/autocomplete?q=X` | Trie-powered prefix suggestions |
 | `GET` | `/api/price_range` | Global min/max prices for slider |
 | `GET` | `/api/cache_stats` | LRU Cache hit/miss statistics |
@@ -250,31 +244,9 @@ g++ -shared -o engine2.dll engine.cpp -O2 -static-libgcc -static-libstdc++
 
 ---
 
-## 🔧 C++ ↔ Python Bridge (ctypes)
+## 🔧 Python DSA Engine
 
-The C++ engine compiles to a Windows DLL (`engine2.dll`). Python loads it via `ctypes`:
-
-```python
-# engine_wrapper.py
-import ctypes, os
-
-os.add_dll_directory(dll_dir)  # required for Python 3.8+ on Windows
-_engine = ctypes.CDLL("engine2.dll")
-
-# Map C++ function signatures
-_engine.search_with_price.argtypes = [
-    ctypes.c_char_p,   # query string
-    ctypes.c_double,   # min_price
-    ctypes.c_double,   # max_price
-    ctypes.c_char_p,   # output buffer
-    ctypes.c_int       # buffer size
-]
-```
-
-Products are passed from Python → C++ as a **pipe-delimited CSV string** on engine startup:
-```
-"1|Nike Running Shoes|5499.0|4.7|988|0.85\n2|Adidas Ultraboost|7200.0|4.6|975|0.90\n..."
-```
+`dsa_engine/engine_wrapper.py` is a pure-Python module used directly by Flask. On startup it builds an in-memory product map, token index, price-sorted list, and LRU cache from the PostgreSQL rows. No compiler, DLL, or language bridge is required.
 
 ---
 
@@ -282,10 +254,10 @@ Products are passed from Python → C++ as a **pipe-delimited CSV string** on en
 
 | Decision | Rationale |
 |----------|-----------|
-| C++ for DSA, Python for API | C++ gives O(1) cache + O(log N) binary search with zero GIL overhead |
-| `os.add_dll_directory()` | Required on Windows Python 3.8+ to load DLL dependencies |
-| `debug=False, use_reloader=False` | Flask debug mode spawns a child process that doesn't inherit C++ global state |
-| Pipe-delimited CSV for data transfer | Avoids JSON parsing overhead when loading 1000+ products into C++ |
+| Python for DSA and API | One runtime keeps deployment and debugging simple |
+| `OrderedDict` LRU cache | Provides O(1) average lookup, promotion, and eviction |
+| `bisect` over price values | Provides O(log N) price-range boundaries |
+| `debug=False, use_reloader=False` | Keeps one initialized in-memory engine for the Flask process |
 | Separate LRU keys for price-filtered queries | `"query\|min\|max"` ensures correct cache isolation per filter combination |
 
 ---
@@ -293,7 +265,7 @@ Products are passed from Python → C++ as a **pipe-delimited CSV string** on en
 ## 📸 Features
 
 - 🔍 **Real-time autocomplete** — Trie-powered, debounced 150ms
-- 🏆 **Top-K ranking** — C++ Min-Heap with weighted score formula
+- 🏆 **Top-K ranking** — Python Min-Heap with weighted score formula
 - ⚡ **LRU Cache** — Instant repeat queries with HIT/MISS tracking
 - 🔢 **Price Range Slider** — Dual-handle slider activates Binary Search path
 - 📊 **DSA Performance Panel** — Live report: structures used, cache status, response time
@@ -305,8 +277,8 @@ Products are passed from Python → C++ as a **pipe-delimited CSV string** on en
 ## 👨‍💻 Author
 
 Built as a portfolio project demonstrating:
-- **Systems programming** — C++ DSA compiled to shared library
-- **Language interop** — Python `ctypes` bridge
+- **Algorithm design** — Trie, Heap, LRU Cache, Binary Search
+- **Python backend engineering** — Flask REST API, SQLAlchemy ORM, and in-memory indexing
 - **Backend engineering** — Flask REST API, SQLAlchemy ORM
 - **Algorithm design** — Trie, Heap, LRU Cache, Binary Search
 

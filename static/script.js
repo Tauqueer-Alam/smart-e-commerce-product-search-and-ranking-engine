@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // ── Autocomplete (C++ Trie) ─────────────────────────────────────
+    // ── Autocomplete (Python Trie index) ────────────────────────────
     searchBar.addEventListener('input', e => {
         const q = e.target.value.trim();
         clearTimeout(debounceTimer);
@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             let products = data.products || data;
 
             // ── Smart fallback ──────────────────────────────────────────────
-            // C++ engine returns global Top-10; category post-filter can yield 0.
+            // The engine returns global Top-10; category post-filter can yield 0.
             // When that happens, show featured products for the selected category.
             if (products.length === 0 && query && activeCategory !== 'All') {
                 const fbRes  = await fetch(`/api/featured?category=${encodeURIComponent(activeCategory)}`, { cache: 'no-store' });
@@ -269,9 +269,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             dsaStructures.appendChild(item);
         });
 
-        // Stats — prefer real C++ engine time; fallback to API response time
+        // Stats — prefer measured engine time; fallback to API response time
         const engineMs = meta.engine_time_ms ?? meta.response_time_ms ?? '—';
-        dsaTime.textContent    = engineMs + (meta.engine_time_ms !== undefined ? ' (C++)' : '');
+        dsaTime.textContent    = engineMs + (meta.engine_time_ms !== undefined ? ' (Python)' : '');
         dsaCount.textContent   = meta.count ?? '—';
         dsaHitRate.textContent = (meta.hit_rate_pct ?? 0) + '%';
         dsaHits.textContent    = meta.cache_hits_total ?? 0;

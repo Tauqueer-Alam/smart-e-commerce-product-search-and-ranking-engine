@@ -8,9 +8,9 @@ app = Flask(__name__)
 def initialize_engine():
     print("Fetching all products from PostgreSQL...")
     products = db.get_all_products()
-    print(f"Feeding {len(products)} products to C++ engine (Trie + Heap + LRU + BinarySearch)...")
+    print(f"Loading {len(products)} products into Python engine (Trie + Heap + LRU + BinarySearch)...")
     loaded = engine.load_products(products)
-    print(f"C++ engine ready: {loaded} products loaded.")
+    print(f"Python engine ready: {loaded} products loaded.")
 
 @app.route('/')
 def index():
@@ -64,7 +64,7 @@ def search():
     min_p    = request.args.get('min_price', type=float, default=None)
     max_p    = request.args.get('max_price', type=float, default=None)
 
-    # We now allow empty queries to pass through to the C++ engine (e.g. for pure price filtering)
+    # Empty queries pass through to the Python engine for pure price filtering.
 
     t_start = time.time()
     price_filter = min_p is not None and max_p is not None
@@ -76,7 +76,7 @@ def search():
         product_ids, cache_hit = engine.search_products(query)
         structures = ["Token Trie (word match)", "Min-Heap (Top-K)", "LRU Cache"]
 
-    # Real C++ engine time (chrono::high_resolution_clock)
+    # Engine timing measured around the Python search operation.
     engine_us = engine.get_last_engine_time_us()
     engine_ms = round(engine_us / 1000.0, 3)
 
@@ -111,8 +111,8 @@ def search():
             "structures_used": structures,
             "price_filter": price_filter,
             "count": len(products),
-            "engine_time_us": engine_us,   # real C++ chrono time
-            "engine_time_ms": engine_ms,   # same, in ms
+            "engine_time_us": engine_us,
+            "engine_time_ms": engine_ms,
             "response_time_ms": response_ms  # total API round-trip
         }
     })
