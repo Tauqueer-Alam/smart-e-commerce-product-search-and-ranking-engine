@@ -168,13 +168,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             loading.classList.add('hidden');
             let products = data.products || data;
 
-            // ── Smart fallback ──────────────────────────────────────────────
-            // The engine returns global Top-10; category post-filter can yield 0.
-            // When that happens, show featured products for the selected category.
+            // ── Filtered search ─────────────────────────────────────────────
+            // Search results already include category and price filters.
+            // Do not replace an empty filtered result with featured products.
             if (products.length === 0 && query && activeCategory !== 'All') {
-                const fbRes  = await fetch(`/api/featured?category=${encodeURIComponent(activeCategory)}`, { cache: 'no-store' });
-                const fbData = await fbRes.json();
-                products = fbData.products || fbData;
                 resultsTitle.textContent = `Top ${activeCategory} Products`;
                 resultsCount.textContent = `No "${query}" results in ${activeCategory}`;
                 renderResults(products);

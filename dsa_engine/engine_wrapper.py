@@ -71,10 +71,12 @@ def _cache_put(key, value):
         _cache.popitem(last=False)
 
 
-def _search(query, min_price=None, max_price=None):
+def _search(query, min_price=None, max_price=None, category=None):
     global _cache_misses, _last_engine_time_us
     started = time.perf_counter_ns()
-    cache_key = query if min_price is None else f"{query}|{int(min_price)}|{int(max_price)}"
+    cache_key = f"{query}|{category or 'All'}"
+    if min_price is not None:
+        cache_key += f"|{int(min_price)}|{int(max_price)}"
     cached = _cache_get(cache_key)
     if cached is not None:
         _last_engine_time_us = (time.perf_counter_ns() - started) // 1000
@@ -93,6 +95,12 @@ def _search(query, min_price=None, max_price=None):
         if tokens:
             matching = _matching_ids(tokens)
             candidates = [product for product in candidates if product["id"] in matching]
+
+    if category:
+        candidates = [
+            product for product in candidates
+            if product["category"] == category
+        ]
 
     result = _top_k(candidates)
     _cache_put(cache_key, result)
@@ -145,14 +153,14 @@ def autocomplete(prefix):
     matching = _matching_ids(tokens)
     return _top_k([_product_map[product_id] for product_id in matching], limit=8)
 
-def search_products(query):
+def search_products(query, category=None):
     """Returns (ids, cache_hit)."""
     hits_before = get_cache_hits()
-    result = _search(query)
+    result = _search(query, category=category)
     return result, get_cache_hits() > hits_before
 
-def search_with_price(query, min_price, max_price):
+def search_with_price(query, min_price, max_price, category=None):
     """Returns (ids, cache_hit). Uses Binary Search + Min-Heap in Python."""
     hits_before = get_cache_hits()
-    result = _search(query, min_price, max_price)
+    result = _search(query, min_price, max_price, category)
     return result, get_cache_hits() > hits_before

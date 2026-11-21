@@ -70,10 +70,10 @@ def search():
     price_filter = min_p is not None and max_p is not None
 
     if price_filter:
-        product_ids, cache_hit = engine.search_with_price(query, min_p, max_p)
+        product_ids, cache_hit = engine.search_with_price(query, min_p, max_p, category or None)
         structures = ["Token Trie (word match)", "Binary Search (price range)", "Min-Heap (Top-K)", "LRU Cache"]
     else:
-        product_ids, cache_hit = engine.search_products(query)
+        product_ids, cache_hit = engine.search_products(query, category or None)
         structures = ["Token Trie (word match)", "Min-Heap (Top-K)", "LRU Cache"]
 
     # Engine timing measured around the Python search operation.
@@ -81,10 +81,6 @@ def search():
     engine_ms = round(engine_us / 1000.0, 3)
 
     products = db.get_products_by_ids(product_ids)
-
-    # Optional category post-filter
-    if category and category != 'All':
-        products = [p for p in products if p.get('category', '') == category]
 
     for p in products:
         # Normalize each term to 0–1 before weighting
